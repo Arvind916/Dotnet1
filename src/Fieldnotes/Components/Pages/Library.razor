@@ -1,0 +1,68 @@
+@page "/library"
+@inherits StudyPageBase
+
+<PageTitle>Concept library | Fieldnotes</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">Your .NET field guide</div><h1>Concept library<span class="heading-dot">.</span></h1><p>@Catalog.All.Count concepts across @Catalog.Tracks.Length learning paths</p></div><span class="heading-badge"><Icon Name="book-open" />@Catalog.All.Sum(item => item.Minutes) min of learning</span></div>
+<ErrorNotice Message="@Error" />
+<section class="library-controls" aria-label="Filter concepts">
+    <div class="filter-tabs" role="group" aria-label="Concept status">
+        @foreach (var option in new[] { "All concepts", "Bookmarked", "In progress", "Completed" })
+        {
+            <button class="filter-tab @(view == option ? "active" : "")" aria-pressed="@(view == option ? "true" : "false")" @onclick="() => view = option">@if (option == "Bookmarked") { <Icon Name="bookmark" /> }@option<span>@CountFor(option)</span></button>
+        }
+    </div>
+    <div class="filter-row">
+        <div class="search-field"><Icon Name="search" /><label class="sr-only" for="library-search">Search the library</label><input id="library-search" type="search" @bind="searchText" @bind:event="oninput" placeholder="Search topics, ideas, or keywords..." autocomplete="off" /></div>
+        <label class="select-field"><span class="sr-only">Learning path</span><Icon Name="list-filter" /><select @bind="selectedTrack" aria-label="Learning path"><option value="">All paths</option>@foreach (var track in Catalog.Tracks) { <option value="@track">@track</option> }</select></label>
+        <label class="select-field"><span class="sr-only">Difficulty</span><select @bind="selectedLevel" aria-label="Difficulty"><option value="">All levels</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
+    </div>
+</section>
+<div class="results-heading"><span><strong>@Visible.Count</strong> @(Visible.Count == 1 ? "concept" : "concepts")</span><span class="small muted">@(string.IsNullOrEmpty(selectedTrack) ? "From the fundamentals to the finer details" : selectedTrack)</span></div>
+@if (Visible.Count == 0)
+{
+    <section class="empty-state library-empty"><span class="empty-icon"><Icon Name="search" /></span><h2>@(view == "Bookmarked" && string.IsNullOrWhiteSpace(searchText) ? "No bookmarks yet" : "No matching concepts")</h2><p>@(view == "Bookmarked" ? "Your saved concepts will be here." : "There are no concepts matching these filters.")</p><button class="button secondary" @onclick="ClearFilters">Clear filters<Icon Name="rotate-ccw" /></button></section>
+}
+else
+{
+    <div class="concept-grid library-grid">
+        @foreach (var concept in Visible)
+        {
+            <ConceptCard @key="concept.Id" Concept="concept" Progress="Snapshot.For(concept.Id)" OnBookmark="HandleBookmarkAsync" Disabled="IsBusy" />
+        }
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
+    [SupplyParameterFromQuery(Name = "track")] public string? Track { get; set; }
+    private string searchText = "";
+    private string selectedTrack = "";
+    private string selectedLevel = "";
+    private string view = "All concepts";
+    private List<Concept> Visible => Catalog.Search(searchText, selectedTrack, selectedLevel).Where(item => MatchesView(item, view)).ToList();
+
+    protected override void OnParametersSet()
+    {
+        searchText = Query ?? "";
+        selectedTrack = Catalog.Tracks.Contains(Track) ? Track! : "";
+    }
+
+    private int CountFor(string option) => Catalog.All.Count(item => MatchesView(item, option));
+    private bool MatchesView(Concept concept, string option) => option switch
+    {
+        "Bookmarked" => Snapshot.For(concept.Id)?.IsBookmarked == true,
+        "In progress" => Snapshot.For(concept.Id) is { IsCompleted: false, LastStudiedAt: not null },
+        "Completed" => Snapshot.For(concept.Id)?.IsCompleted == true,
+        _ => true
+    };
+
+    private void ClearFilters()
+    {
+        searchText = "";
+        selectedTrack = "";
+        selectedLevel = "";
+        view = "All concepts";
+    }
+
+    private async Task HandleBookmarkAsync(string conceptId) => await BookmarkAsync(conceptId);
+}

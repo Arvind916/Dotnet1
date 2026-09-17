@@ -1,0 +1,14 @@
+**/bin
+**/obj
+**/App_Data
+**/*.db*
+.git
+.vs
+.idea
+node_modules
+test-results
+playwright-report
+artifacts
+tests
+docs
+.env*

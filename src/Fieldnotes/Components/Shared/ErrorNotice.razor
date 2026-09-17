@@ -1,0 +1,8 @@
+@if (!string.IsNullOrWhiteSpace(Message))
+{
+    <p class="error-note" role="alert"><Icon Name="circle-alert" />@Message</p>
+}
+
+@code {
+    [Parameter] public string? Message { get; set; }
+}

@@ -1,0 +1,68 @@
+@page "/"
+@inherits StudyPageBase
+
+<PageTitle>Overview | Fieldnotes</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">@Now.ToString("dddd, d MMMM", CultureInfo.InvariantCulture)</div><h1>Your study desk<span class="heading-dot">.</span></h1><p>A little progress. A stronger answer.</p></div><a class="button secondary" href="progress"><Icon Name="chart-no-axes-combined" />View progress</a></div>
+<ErrorNotice Message="@Error" />
+@if (IsReady)
+{
+    <section class="stats-band" aria-label="Learning statistics">
+        <div class="stat"><span class="stat-label"><Icon Name="circle-check" />Concepts completed</span><div class="stat-value">@Snapshot.Completed<span>/ @Catalog.All.Count</span></div><div class="stat-foot">@CompletionPercent% of your learning path</div></div>
+        <div class="stat"><span class="stat-label"><Icon Name="target" />Quiz accuracy</span><div class="stat-value">@(Snapshot.Attempts.Count == 0 ? "-" : $"{Snapshot.Accuracy}%")</div><div class="stat-foot">@(Snapshot.Attempts.Count == 0 ? "No questions answered yet" : $"Across {Snapshot.Attempts.Count} answers")</div></div>
+        <div class="stat"><span class="stat-label"><Icon Name="layers" />Ready to review</span><div class="stat-value">@DueCount<span>concepts</span></div><a class="stat-foot stat-link" href="revision">Your revision queue<Icon Name="arrow-right" /></a></div>
+        <div class="stat"><span class="stat-label"><Icon Name="flame" />Current streak</span><div class="stat-value">@Streak<span>@(Streak == 1 ? "day" : "days")</span></div><div class="stat-foot">@(Streak == 0 ? "A fresh start is a good start" : "One day at a time")</div></div>
+    </section>
+
+    <section class="focus-band" aria-label="Recommended lesson">
+        <div class="focus-copy"><div class="eyebrow accent"><span class="mini-spark"><Icon Name="sparkles" /></span>@(Snapshot.For(Focus.Id)?.LastStudiedAt is not null ? "Pick up where you left off" : "Your next concept")</div><h2>@Focus.Title</h2><p>@Focus.Summary</p><div class="focus-meta"><span>@Focus.Track</span><span class="dot-separator"></span><span>@Focus.Minutes min read</span><span class="level level-@Focus.Level.ToLowerInvariant()">@Focus.Level</span></div><a class="button primary" href="@($"concept/{Focus.Id}")">@(Snapshot.For(Focus.Id)?.LastStudiedAt is not null ? "Continue lesson" : "Start lesson")<Icon Name="arrow-right" /></a></div>
+        <div class="journey-progress"><div class="progress-ring" style="@($"--progress: {CompletionPercent}%")"><div><Icon Name="sprout" /><strong>@Snapshot.Completed<span>/@Catalog.All.Count</span></strong><span>concepts complete</span></div></div><div class="journey-caption">Your next chapter is taking shape.</div></div>
+    </section>
+
+    <div class="dashboard-columns">
+        <section class="learning-paths"><div class="section-heading"><h2>Your learning paths</h2><a class="text-link" href="library">View all<Icon Name="arrow-up-right" /></a></div><div class="path-list">
+            @foreach (var track in Catalog.Tracks)
+            {
+                var concepts = Catalog.All.Where(item => item.Track == track).ToList();
+                var completed = concepts.Count(item => Snapshot.For(item.Id)?.IsCompleted == true);
+                <a class="path-row" href="@($"library?track={Uri.EscapeDataString(track)}")"><span class="track-icon tone-@Presentation.TrackTone(track)"><Icon Name="@Presentation.TrackIcon(track)" /></span><div class="path-info"><h3>@track</h3><span>@concepts.Count concepts<span class="dot-separator"></span>@concepts.Sum(item => item.Minutes) min</span></div><div class="path-progress"><span>@completed / @concepts.Count</span><progress max="@concepts.Count" value="@completed" aria-label="@($"{track} completed concepts")"></progress></div><Icon Name="chevron-right" /></a>
+            }
+        </div></section>
+        <section class="activity-sidebar"><div class="section-heading"><h2>Recent activity</h2><Icon Name="history" /></div>
+            @if (Snapshot.Activities.Count == 0)
+            {
+                <div class="activity-empty"><span class="empty-icon"><Icon Name="coffee" /></span><h3>A clean page.</h3><p>No study sessions yet.</p><a class="text-link" href="library">Find your first concept<Icon Name="arrow-right" /></a></div>
+            }
+            else
+            {
+                <div class="activity-list">@foreach (var activity in Snapshot.Activities.Take(5))
+                {
+                    <a class="activity-item" href="@($"concept/{activity.ConceptId}")"><span class="activity-marker"></span><div><span class="activity-kind">@activity.Kind</span><strong>@(Catalog.Find(activity.ConceptId)?.Title ?? activity.ConceptId)</strong><time>@Presentation.Since(activity.CreatedAt, Now)</time></div></a>
+                }</div>
+            }
+            <div class="session-callout"><div><Icon Name="circle-help" /><span>Today's challenge</span></div><h3>Five questions.<br />One sharper perspective.</h3><a href="practice" class="text-link">Start a practice session<Icon Name="arrow-right" /></a></div>
+        </section>
+    </div>
+
+    <section class="recommended-section"><div class="section-heading"><h2>@(WeakConcepts.Any() ? "Worth another look" : "Build your foundation")</h2><span class="muted small">@(WeakConcepts.Any() ? "Based on your quiz answers" : "A few good places to begin")</span></div><div class="concept-grid dashboard-cards">
+        @foreach (var concept in Recommendations)
+        {
+            <ConceptCard Concept="concept" Progress="Snapshot.For(concept.Id)" OnBookmark="HandleBookmarkAsync" Disabled="IsBusy" />
+        }
+    </div></section>
+}
+else if (Error is null)
+{
+    <div class="loading-state" role="status">Opening your workspace...</div>
+}
+
+@code {
+    private int CompletionPercent => StudyPlanner.Accuracy(Snapshot.Completed, Catalog.All.Count);
+    private int DueCount => Snapshot.Progress.Count(item => StudyPlanner.IsDue(item, Now));
+    private int Streak => StudyPlanner.Streak(Snapshot.Activities.Select(item => item.CreatedAt), Now);
+    private IEnumerable<Concept> WeakConcepts => Catalog.All.Where(item => Snapshot.For(item.Id) is { } progress && StudyPlanner.IsWeak(progress));
+    private IEnumerable<Concept> Recommendations => WeakConcepts.Concat(Catalog.All.Where(item => Snapshot.For(item.Id)?.IsCompleted != true)).DistinctBy(item => item.Id).Take(3);
+    private Concept Focus => Catalog.All.FirstOrDefault(item => Snapshot.For(item.Id) is { IsCompleted: false, LastStudiedAt: not null })
+        ?? Catalog.All.FirstOrDefault(item => Snapshot.For(item.Id)?.IsCompleted != true)
+        ?? Catalog.All[0];
+    private async Task HandleBookmarkAsync(string conceptId) => await BookmarkAsync(conceptId);
+}

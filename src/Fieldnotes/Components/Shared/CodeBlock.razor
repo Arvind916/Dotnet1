@@ -1,0 +1,38 @@
+@inject IJSRuntime JavaScript
+
+<div class="code-window" @ref="container">
+    <div class="code-toolbar"><span class="code-dots"><i></i><i></i><i></i></span><span>@Label</span><button class="icon-button" title="@copyMessage" aria-label="@copyMessage" @onclick="CopyAsync"><Icon Name="@(copied ? "check" : "copy")" /></button></div>
+    <pre tabindex="0"><code class="language-@Language">@Code</code></pre>
+    <span class="sr-only" role="status">@(copied ? "Code copied" : "")</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Code { get; set; } = "";
+    [Parameter] public string Language { get; set; } = "csharp";
+    [Parameter] public string Label { get; set; } = "C#";
+    private ElementReference container;
+    private bool copied;
+    private string copyMessage = "Copy code";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JavaScript.InvokeVoidAsync("fieldnotes.highlight", container);
+        }
+    }
+
+    private async Task CopyAsync()
+    {
+        try
+        {
+            await JavaScript.InvokeVoidAsync("fieldnotes.copy", Code);
+            copied = true;
+            copyMessage = "Copied";
+        }
+        catch (JSException)
+        {
+            copyMessage = "Copy unavailable. Select the code to copy it.";
+        }
+    }
+}

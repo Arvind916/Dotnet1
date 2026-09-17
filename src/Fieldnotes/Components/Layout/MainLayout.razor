@@ -1,0 +1,68 @@
+@inherits LayoutComponentBase
+@inject ConceptCatalog Catalog
+@inject NavigationManager Navigation
+
+<a class="skip-link" href="@MainContentLink">Skip to content</a>
+<div class="workspace">
+    @if (menuOpen)
+    {
+        <button class="sidebar-scrim" aria-label="Close navigation" @onclick="CloseMenu"></button>
+    }
+    <aside class="sidebar @(menuOpen ? "is-open" : "")">
+        <a class="brand" href="" @onclick="CloseMenu" aria-label="Fieldnotes overview">
+            <span class="brand-symbol"><Icon Name="notebook-pen" /></span>
+            <span>fieldnotes<span class="brand-subtitle">The .NET interview workspace</span></span>
+        </a>
+        <div class="nav-caption">Workspace</div>
+        <nav class="main-nav" aria-label="Main navigation">
+            <NavLink href="" Match="NavLinkMatch.All" class="nav-item" @onclick="CloseMenu"><Icon Name="layout-dashboard" />Overview</NavLink>
+            <NavLink href="library" class="nav-item" @onclick="CloseMenu"><Icon Name="book-open" />Concept library<span class="nav-count">@Catalog.All.Count</span></NavLink>
+            <NavLink href="practice" class="nav-item" @onclick="CloseMenu"><Icon Name="circle-help" />Quiz practice</NavLink>
+            <NavLink href="revision" class="nav-item" @onclick="CloseMenu"><Icon Name="layers" />Quick revision</NavLink>
+            <NavLink href="progress" class="nav-item" @onclick="CloseMenu"><Icon Name="chart-no-axes-combined" />My progress</NavLink>
+        </nav>
+        <div class="sidebar-bottom">
+            <div class="curriculum-note">
+                <div class="curriculum-label"><img src="images/dotnet.png" alt=".NET" width="27" height="27" /><span>.NET developer path</span></div>
+                <div class="curriculum-meta">@Catalog.Tracks.Length tracks<span class="dot-separator"></span>@Catalog.All.Sum(item => item.Quiz.Length) questions</div>
+            </div>
+            <a href="progress" class="profile-link" @onclick="CloseMenu"><span class="avatar">Y</span><span>Your workspace<small>Personal learning profile</small></span><Icon Name="chevron-right" /></a>
+        </div>
+    </aside>
+    <div class="workspace-body">
+        <header class="topbar">
+            <button class="icon-button mobile-menu" @onclick="ToggleMenu" title="Toggle navigation" aria-label="Toggle navigation" aria-expanded="@(menuOpen ? "true" : "false")"><Icon Name="menu" /></button>
+            <div class="workspace-label"><span class="status-dot"></span>Learning workspace<span class="topbar-divider">/</span><span>.NET</span></div>
+            <form class="global-search" action="library" method="get" @onsubmit="Search" @onsubmit:preventDefault>
+                <Icon Name="search" />
+                <label class="sr-only" for="global-search">Search concepts</label>
+                <input id="global-search" name="q" placeholder="Search a concept..." type="search" autocomplete="off" @bind="query" @bind:event="oninput" />
+            </form>
+            <button class="icon-button theme-toggle" type="button" data-theme-toggle
+                    title="Switch color theme" aria-label="Switch color theme" aria-pressed="false">
+                <Icon Name="moon" Class="theme-to-dark" />
+                <Icon Name="sun" Class="theme-to-light" />
+            </button>
+            <a class="icon-button docs-link" href="https://learn.microsoft.com/en-us/dotnet/" target="_blank" rel="noopener noreferrer" title="Microsoft .NET documentation" aria-label="Microsoft .NET documentation"><Icon Name="external-link" /></a>
+            <a class="topbar-avatar" href="progress" title="Your progress" aria-label="Your progress">Y</a>
+        </header>
+        <main id="main-content" class="main-content">
+            <ErrorBoundary>
+                <ChildContent>@Body</ChildContent>
+                <ErrorContent>
+                    <section class="empty-state page-empty"><Icon Name="circle-alert" /><h1>Something went wrong</h1><p>Your saved progress has not been reset.</p><button class="button primary" @onclick="Reload">Reload workspace<Icon Name="refresh-cw" /></button></section>
+                </ErrorContent>
+            </ErrorBoundary>
+        </main>
+        <footer class="app-footer"><span>fieldnotes<span class="footer-dot">.</span> One concept at a time.</span><span>.NET 10 <span class="dot-separator"></span> Built for the next step</span></footer>
+    </div>
+</div>
+@code {
+    private bool menuOpen;
+    private string query = "";
+    private string MainContentLink => new UriBuilder(Navigation.Uri) { Fragment = "main-content" }.Uri.AbsoluteUri;
+    private void Search() => Navigation.NavigateTo($"library?q={Uri.EscapeDataString(query)}");
+    private void Reload() => Navigation.NavigateTo(Navigation.BaseUri, forceLoad: true);
+    private void ToggleMenu() => menuOpen = !menuOpen;
+    private void CloseMenu() => menuOpen = false;
+}

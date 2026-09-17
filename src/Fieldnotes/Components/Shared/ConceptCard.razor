@@ -1,0 +1,15 @@
+<article class="concept-card">
+    <div class="concept-card-top"><span class="track-icon tone-@Presentation.TrackTone(Concept.Track)"><Icon Name="@Presentation.TrackIcon(Concept.Track)" /></span><span class="level level-@Concept.Level.ToLowerInvariant()">@Concept.Level</span><button class="icon-button bookmark-button @(Progress?.IsBookmarked == true ? "is-saved" : "")" aria-label="@BookmarkLabel" title="@BookmarkLabel" aria-pressed="@(Progress?.IsBookmarked == true ? "true" : "false")" disabled="@Disabled" @onclick="() => OnBookmark.InvokeAsync(Concept.Id)"><Icon Name="bookmark" /></button></div>
+    <div class="concept-track">@Concept.Track</div>
+    <h3><a href="@($"concept/{Concept.Id}")">@Concept.Title</a></h3>
+    <p>@Concept.Summary</p>
+    <div class="concept-card-footer"><span class="small-meta"><Icon Name="clock-3" />@Concept.Minutes min</span><a href="@($"concept/{Concept.Id}")" class="concept-open @(Progress?.IsCompleted == true ? "is-complete" : "")">@(Progress?.IsCompleted == true ? "Completed" : Progress?.LastStudiedAt is not null ? "Continue" : "Start learning")<Icon Name="@(Progress?.IsCompleted == true ? "circle-check" : "arrow-up-right")" /></a></div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public Concept Concept { get; set; } = null!;
+    [Parameter] public LearningProgress? Progress { get; set; }
+    [Parameter] public EventCallback<string> OnBookmark { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    private string BookmarkLabel => $"{(Progress?.IsBookmarked == true ? "Remove bookmark for" : "Bookmark")} {Concept.Title}";
+}

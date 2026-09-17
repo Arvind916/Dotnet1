@@ -1,0 +1,83 @@
+name: Build and Deploy Pages
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Restore .NET dependencies
+        run: dotnet restore DotnetFieldnotes.slnx
+      - name: Test rules, persistence, and content
+        run: dotnet test DotnetFieldnotes.slnx --configuration Release --no-restore --logger trx --results-directory artifacts/test-results
+      - name: Install browser test dependencies
+        run: npm ci
+      - name: Verify static hosting rules
+        run: npm run test:hosting
+      - name: Read GitHub Pages configuration
+        id: pages
+        if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' }}
+        uses: actions/configure-pages@v5
+      - name: Build static application
+        env:
+          PAGES_BASE_PATH: ${{ steps.pages.outcome == 'success' && format('{0}/', steps.pages.outputs.base_path) || '/dotnet-fieldnotes/' }}
+        run: |
+          npm run build:pages -- "$PAGES_BASE_PATH"
+          echo "FIELDNOTES_BASE_PATH=$PAGES_BASE_PATH" >> "$GITHUB_ENV"
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify browser workflows and themes
+        run: npm run test:e2e
+      - name: Upload Pages site
+        if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: artifacts/pages/wwwroot
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            artifacts/test-results
+            playwright-report
+            test-results
+            docs/screenshots
+          retention-days: 7
+
+  deploy:
+    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' }}
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

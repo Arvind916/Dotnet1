@@ -1,0 +1,64 @@
+@page "/progress"
+@inherits StudyPageBase
+@inject IJSRuntime JavaScript
+
+<PageTitle>My progress | Fieldnotes</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">The work is adding up</div><h1>My progress<span class="heading-dot">.</span></h1><p>Your personal learning record</p></div><button class="button secondary" disabled="@(IsBusy || !IsReady)" @onclick="ExportAsync"><Icon Name="download" />Export progress</button></div>
+<ErrorNotice Message="@Error" />
+@if (IsReady)
+{
+    <section class="stats-band" aria-label="Progress statistics"><div class="stat"><span class="stat-label"><Icon Name="circle-check" />Concepts completed</span><div class="stat-value">@Snapshot.Completed<span>/ @Catalog.All.Count</span></div><div class="stat-foot">@StudyPlanner.Accuracy(Snapshot.Completed, Catalog.All.Count)% of the curriculum</div></div><div class="stat"><span class="stat-label"><Icon Name="target" />Quiz accuracy</span><div class="stat-value">@(Snapshot.Attempts.Count == 0 ? "-" : $"{Snapshot.Accuracy}%")</div><div class="stat-foot">@Snapshot.Attempts.Count answers recorded</div></div><div class="stat"><span class="stat-label"><Icon Name="flame" />Current streak</span><div class="stat-value">@StudyPlanner.Streak(Snapshot.Activities.Select(item => item.CreatedAt), Now)<span>days</span></div><div class="stat-foot">Consecutive study days, UTC</div></div><div class="stat"><span class="stat-label"><Icon Name="bookmark" />Saved concepts</span><div class="stat-value">@Snapshot.Progress.Count(item => item.IsBookmarked)</div><div class="stat-foot">In your bookmarks</div></div></section>
+    <section class="study-activity-section"><div class="section-heading"><h2>Showing up is progress</h2><span class="small muted">Last 28 days, UTC</span></div><div class="heatmap" aria-label="Daily study activity">
+            @for (var offset = 27; offset >= 0; offset--)
+            {
+                var day = Now.Date.AddDays(-offset);
+                var count = Snapshot.Activities.Count(item => item.CreatedAt.Date == day);
+                var label = $"{day:MMMM d}: {count} study activities";
+                <span class="heat-cell heat-@Math.Min(count, 3) @(offset == 0 ? "today" : "")" tabindex="0" role="img" aria-label="@label" title="@label">@day.Day</span>
+            }
+        </div><div class="heatmap-footer"><span>@Snapshot.Activities.Count(item => item.CreatedAt >= Now.Date.AddDays(-27)) activities in the last 28 days</span><div class="heatmap-key"><span>Less</span><i class="heat-0"></i><i class="heat-1"></i><i class="heat-2"></i><i class="heat-3"></i><span>More</span></div></div></section>
+    <section class="track-progress-section"><div class="section-heading"><h2>Path by path</h2><a href="library" class="text-link">Keep learning<Icon Name="arrow-right" /></a></div><div class="table-scroll" tabindex="0" role="region" aria-label="Learning path progress"><table class="progress-table"><thead><tr><th>Learning path</th><th>Completed</th><th>Quiz accuracy</th><th>Weak concepts</th></tr></thead><tbody>@foreach (var track in Catalog.Tracks)
+                {
+                    var concepts = Catalog.All.Where(item => item.Track == track).ToList();
+                    var ids = concepts.Select(item => item.Id).ToHashSet();
+                    var completed = concepts.Count(item => Snapshot.For(item.Id)?.IsCompleted == true);
+                    var attempts = Snapshot.Attempts.Where(item => ids.Contains(item.ConceptId)).ToList();
+                    <tr><td><a href="@($"library?track={Uri.EscapeDataString(track)}")"><span class="track-icon tone-@Presentation.TrackTone(track)"><Icon Name="@Presentation.TrackIcon(track)" /></span>@track</a></td><td><div class="table-progress"><span>@completed / @concepts.Count</span><progress max="@concepts.Count" value="@completed" aria-label="@($"{track} completion")"></progress></div></td><td>@(attempts.Count == 0 ? "-" : $"{StudyPlanner.Accuracy(attempts.Count(item => item.IsCorrect), attempts.Count)}%")</td><td>@concepts.Count(item => Snapshot.For(item.Id) is { } progress && StudyPlanner.IsWeak(progress))</td></tr>
+                }</tbody></table></div></section>
+    <div class="progress-columns"><section><div class="section-heading"><h2>Worth another look</h2><a href="revision?mode=weak" class="text-link">Review<Icon Name="arrow-right" /></a></div>
+            @if (WeakConcepts.Count == 0)
+            {
+                <div class="empty-state compact-empty"><span class="empty-icon"><Icon Name="sprout" /></span><h3>No weak topics yet.</h3><p>Attempted concepts below 70% accuracy appear here.</p></div>
+            }
+            else
+            {
+                <div class="weak-concepts">@foreach (var concept in WeakConcepts)
+                    {
+                        var progress = Snapshot.For(concept.Id)!;
+                        <a href="@($"concept/{concept.Id}")"><span class="track-icon tone-coral"><Icon Name="refresh-cw" /></span><div><strong>@concept.Title</strong><span>@progress.Attempts questions answered</span></div><span class="weak-score">@StudyPlanner.Accuracy(progress.CorrectAnswers, progress.Attempts)%</span><Icon Name="chevron-right" /></a>
+                    }</div>
+            }
+        </section><section><div class="section-heading"><h2>Study history</h2><span class="small muted">Recent 15 activities</span></div>
+            @if (Snapshot.Activities.Count == 0)
+            {
+                <div class="empty-state compact-empty"><span class="empty-icon"><Icon Name="history" /></span><h3>A fresh start.</h3><p>No study activity recorded yet.</p></div>
+            }
+            else
+            {
+                <div class="study-history">@foreach (var activity in Snapshot.Activities.Take(15))
+                    {
+                        <a href="@($"concept/{activity.ConceptId}")"><span class="history-dot"></span><div><strong>@(Catalog.Find(activity.ConceptId)?.Title ?? activity.ConceptId)</strong><span>@activity.Kind</span></div><time title="@($"{activity.CreatedAt:yyyy-MM-dd HH:mm} UTC")">@Presentation.Since(activity.CreatedAt, Now)</time></a>
+                    }</div>
+            }
+        </section></div>
+    <div class="profile-note"><Icon Name="shield-check" /><span>Profile: this browser<span class="dot-separator"></span>Storage: IndexedDB<span class="dot-separator"></span>Study calendar: UTC</span></div>
+}
+
+@code {
+    private Task ExportAsync() => SaveAsync(async () =>
+        await JavaScript.InvokeVoidAsync("fieldnotesStorage.download", await Study.ExportAsync()));
+
+    private List<Concept> WeakConcepts => Catalog.All
+        .Where(item => Snapshot.For(item.Id) is { } progress && StudyPlanner.IsWeak(progress))
+        .OrderBy(item => (double)Snapshot.For(item.Id)!.CorrectAnswers / Snapshot.For(item.Id)!.Attempts).ToList();
+}

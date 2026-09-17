@@ -1,0 +1,85 @@
+@page "/revision"
+@inherits StudyPageBase
+
+<PageTitle>Quick revision | Fieldnotes</PageTitle>
+<div class="page-heading"><div><div class="eyebrow">A fresh look at familiar ideas</div><h1>Quick revision<span class="heading-dot">.</span></h1><p>@Snapshot.Progress.Count(item => StudyPlanner.IsDue(item, Now)) concepts due for a revisit</p></div><a class="button secondary" href="library"><Icon Name="book-open" />Concept library</a></div>
+<ErrorNotice Message="@Error" />
+<div class="revision-filters segmented-control" role="group" aria-label="Revision deck">
+    @foreach (var option in new[] { (Key: "due", Label: "Due now"), (Key: "all", Label: "All concepts"), (Key: "weak", Label: "Weak topics"), (Key: "bookmarked", Label: "Bookmarked") })
+    {
+        <button class="@(mode == option.Key ? "active" : "")" aria-pressed="@(mode == option.Key ? "true" : "false")" disabled="@IsBusy" @onclick="() => BuildDeck(option.Key)">@option.Label</button>
+    }
+</div>
+@if (deck.Count == 0)
+{
+    <section class="empty-state revision-empty"><span class="empty-icon"><Icon Name="@(reviewed > 0 ? "circle-check" : "sun")" /></span><h2>@(reviewed > 0 ? "A good session, all wrapped up." : mode == "due" ? "Nothing due right now." : mode == "weak" ? "No weak topics on your list." : "No concepts in this deck.")</h2><p>@(reviewed > 0 ? $"{reviewed} concepts reviewed. Your progress is saved." : mode == "weak" ? "No attempted concepts have accuracy below 70%." : mode == "bookmarked" ? "No bookmarked concepts yet." : "A little extra practice is always an option.")</p><button class="button primary" @onclick="ReviewAll">Review all concepts<Icon Name="arrow-right" /></button></section>
+}
+else if (Current is not null)
+{
+    <div class="revision-layout"><section class="flashcard-workspace"><div class="flashcard-counter"><span>Card @(reviewed + 1) of @total</span><span>@reviewed reviewed</span></div><progress max="@total" value="@reviewed" aria-label="Cards reviewed"></progress><article class="flashcard" @key="Current.Id"><div class="flashcard-meta"><span class="track-icon tone-@Presentation.TrackTone(Current.Track)"><Icon Name="@Presentation.TrackIcon(Current.Track)" /></span><span>@Current.Track</span><span class="level level-@Current.Level.ToLowerInvariant()">@Current.Level</span></div><span class="eyebrow">@Current.Title</span><h2>@Question.Question</h2>
+                @if (revealed)
+                {
+                    <div class="flashcard-answer" role="status"><div class="eyebrow accent">The short answer</div><p>@Question.Answer</p></div>
+                    <div class="flashcard-rating">
+                        <button class="button secondary" disabled="@IsBusy" @onclick="() => RateAsync(false)"><Icon Name="rotate-ccw" />Again</button>
+                        <button class="button primary" disabled="@IsBusy" @onclick="() => RateAsync(true)"><Icon Name="check" />Got it</button>
+                    </div>
+                }
+                else
+                {
+                    <button class="button secondary reveal-button" @onclick="() => revealed = true"><Icon Name="eye" />Reveal answer</button>
+                }
+            </article><div class="flashcard-footer"><a href="@($"concept/{Current.Id}?quick=true")" class="text-link">Open quick notes<Icon Name="arrow-up-right" /></a><span class="small muted">@Current.Minutes min full lesson</span></div></section>
+        <aside class="review-queue"><div class="section-heading"><h2>In this deck</h2><span class="small muted">@deck.Count left</span></div><ol>@foreach (var concept in deck.Take(7))
+            {
+                <li class="@(concept.Id == Current.Id ? "current" : "")"><a href="@($"concept/{concept.Id}?quick=true")"><span class="queue-dot"></span><span>@concept.Title</span></a></li>
+            }</ol>@if (deck.Count > 7) { <div class="small muted queue-more">And @(deck.Count - 7) more concepts</div> }<div class="review-session-stat"><Icon Name="layers" /><strong>@reviewed</strong><span>reviewed this session</span></div></aside>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "mode")] public string? Mode { get; set; }
+    private string? previousMode = "__initial";
+    private string mode = "due";
+    private List<Concept> deck = [];
+    private bool revealed;
+    private int reviewed;
+    private int total;
+    private Concept? Current => deck.FirstOrDefault();
+    private InterviewQuestion Question => Current!.Interview[(Snapshot.For(Current.Id)?.ReviewStage ?? 0) % Current.Interview.Length];
+    private void ReviewAll() => BuildDeck("all");
+
+    protected override void OnParametersSet()
+    {
+        if (previousMode == Mode) return;
+        previousMode = Mode;
+        BuildDeck(Mode is "all" or "weak" or "bookmarked" ? Mode : "due");
+    }
+
+    private void BuildDeck(string selection)
+    {
+        mode = selection;
+        deck = Catalog.All.Where(concept => selection switch
+        {
+            "due" => Snapshot.For(concept.Id) is { } progress && StudyPlanner.IsDue(progress, Now),
+            "weak" => Snapshot.For(concept.Id) is { } progress && StudyPlanner.IsWeak(progress),
+            "bookmarked" => Snapshot.For(concept.Id)?.IsBookmarked == true,
+            _ => true
+        }).OrderBy(concept => Snapshot.For(concept.Id)?.NextReviewAt ?? DateTime.MaxValue).ToList();
+        total = deck.Count;
+        reviewed = 0;
+        revealed = false;
+    }
+
+    private async Task RateAsync(bool remembered)
+    {
+        if (Current is null || !revealed || IsBusy) return;
+        var conceptId = Current.Id;
+        if (await SaveAsync(() => Study.ReviewAsync(conceptId, remembered)))
+        {
+            deck.RemoveAt(0);
+            reviewed++;
+            revealed = false;
+        }
+    }
+}

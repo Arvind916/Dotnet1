@@ -1,0 +1,9 @@
+@inject NavigationManager Navigation
+
+<span class="icon @Class" style="@($"--icon: url('{IconUrl}')")" aria-hidden="true"></span>
+
+@code {
+    [Parameter] public string Name { get; set; } = "book-open";
+    [Parameter] public string? Class { get; set; }
+    private string IconUrl => Navigation.ToAbsoluteUri($"icons/{Name}.svg").AbsoluteUri;
+}

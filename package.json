@@ -1,0 +1,16 @@
+{
+  "name": "dotnet-fieldnotes-browser-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Browser verification for the .NET Fieldnotes application",
+  "scripts": {
+    "build:pages": "node scripts/build-pages.mjs",
+    "preview:pages": "node scripts/serve-pages.mjs artifacts/pages/wwwroot 5270 /dotnet-fieldnotes/",
+    "test:hosting": "node --test tests/hosting/pages.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

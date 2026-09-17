@@ -52,7 +52,7 @@ jobs:
         run: npm run test:e2e
       - name: Upload Pages site
         if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request' }}
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: artifacts/pages/wwwroot
       - name: Upload test diagnostics

@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.9" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.9" PrivateAssets="all" />
+    <Compile Remove="Data/*/.cs;Services/LearnerMiddleware.cs;Services/LearnerSession.cs" />
     <EmbeddedResource Include="Content/*.json" />
   </ItemGroup>
 </Project>
